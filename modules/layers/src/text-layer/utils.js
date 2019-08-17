@@ -1,4 +1,5 @@
 // TODO merge with icon-layer/icon-manager
+/* global document */
 import {log} from '@deck.gl/core';
 
 const MISSING_CHAR_WIDTH = 32;
@@ -6,6 +7,8 @@ const MISSING_CHAR_WIDTH = 32;
 export function nextPowOfTwo(number) {
   return Math.pow(2, Math.ceil(Math.log2(number)));
 }
+
+const BASE_STYLE = 'position: absolute; top: 0; left: 0; z-index: 1000;';
 
 /**
  * Generate character mapping table or update from an existing mapping table
@@ -69,42 +72,139 @@ export function buildMapping({
   };
 }
 
-export function transformRow(row, iconMapping, lineHeight) {
+export function autoWrapping(
+  string,
+  iconMapping,
+  height,
+  width,
+  wordBreak,
+  fontSize,
+  fontFamily,
+  fontWeight,
+  textAlign
+) {
+  const characters = Array.from(string);
+  const textDiv = document.createElement('div');
+  textDiv.style = `
+    ${BASE_STYLE}
+    word-break: ${wordBreak};
+    height: ${height};
+    width: ${width}px;
+    font-size: ${fontSize}px;
+    font-family: ${fontFamily};
+    font-weight: ${fontWeight};
+    text-align: ${textAlign || 'left'}
+  `;
+
+  characters.map((character, i) => {
+    const span = document.createElement('span');
+    span.innerText = character;
+    textDiv.appendChild(span);
+  });
+
+  document.body.appendChild(textDiv);
+  return textDiv;
+}
+
+export function transformRow(
+  row,
+  iconMapping,
+  width,
+  lineHeight,
+  wordBreak,
+  fontSize,
+  fontFamily,
+  fontWeight,
+  textAlign
+) {
+  let textDiv;
+  if (wordBreak) {
+    const height = Object.values(iconMapping)[0].height * lineHeight;
+    textDiv = autoWrapping(
+      row,
+      iconMapping,
+      height,
+      width,
+      wordBreak,
+      fontSize,
+      fontFamily,
+      fontWeight,
+      textAlign
+    );
+  }
+
   let offsetLeft = 0;
   let rowHeight = 0;
 
   let characters = Array.from(row);
+
   characters = characters.map((character, i) => {
-    const datum = {
-      text: character,
-      offsetLeft
-    };
+    let datum;
 
-    const frame = iconMapping[character];
+    if (wordBreak) {
+      const span = textDiv.childNodes[i];
+      const rect = span.getBoundingClientRect();
 
-    if (frame) {
-      offsetLeft += frame.width;
-      if (!rowHeight) {
+      datum = {
+        text: character,
+        offsetTop: rect.top,
+        offsetLeft: rect.left
+      };
+
+      const frame = iconMapping[character];
+
+      if (frame) {
+        offsetLeft += rect.width;
+      } else {
+        log.warn(`Missing character: ${character}`)();
+        offsetLeft += MISSING_CHAR_WIDTH;
+      }
+
+      if (i === characters.length - 1) {
         // frame.height should be a constant
-        rowHeight = frame.height * lineHeight;
+        rowHeight = rect.bottom;
       }
     } else {
-      log.warn(`Missing character: ${character}`)();
-      offsetLeft += MISSING_CHAR_WIDTH;
+      datum = {
+        text: character,
+        offsetTop: 0,
+        offsetLeft
+      };
+
+      const frame = iconMapping[character];
+
+      if (frame) {
+        offsetLeft += frame.width;
+        if (!rowHeight) {
+          // frame.height should be a constant
+          rowHeight = frame.height * lineHeight;
+        }
+      } else {
+        log.warn(`Missing character: ${character}`)();
+        offsetLeft += MISSING_CHAR_WIDTH;
+      }
     }
 
     return datum;
   });
 
-  return {characters, rowWidth: offsetLeft, rowHeight};
+  return {
+    characters,
+    rowWidth: wordBreak ? width : offsetLeft,
+    rowHeight
+  };
 }
 
 /**
  * Transform a text paragraph to an array of characters, each character contains
- * @param paragraph {String}
- * @param lineHeight {Number} css line-height
- * @param iconMapping {Object} character mapping table for retrieving a character from font atlas
- * @param transformCharacter {Function} callback to transform a single character
+ * @param props:
+ *   - paragraph {String}
+ *   - wordBreak {String} css word-break option
+ *   - fontSize {number} css font-size
+ *   - width {number} css width of the element
+ *   - lineHeight {Number} css line-height
+ *   - iconMapping {Object} character mapping table for retrieving a character from font atlas
+ *   - transformCharacter {Function} callback to transform a single character
  * @param transformedData {Array} output transformed data array, each datum contains
  *   - text: character
  *   - index: character index in the paragraph
@@ -115,10 +215,19 @@ export function transformRow(row, iconMapping, lineHeight) {
  *   - len: length of the paragraph
  */
 export function transformParagraph(
-  paragraph,
-  lineHeight,
-  iconMapping,
-  transformCharacter,
+  {
+    paragraph,
+    iconMapping,
+    transformCharacter,
+    // styling
+    lineHeight,
+    wordBreak,
+    fontSize,
+    fontFamily,
+    fontWeight,
+    width,
+    textAlign
+  },
   transformedData
 ) {
   const rows = paragraph.split('\n');
@@ -128,13 +237,23 @@ export function transformParagraph(
   let offsetTop = 0;
 
   rows.forEach(row => {
-    const {characters, rowWidth, rowHeight} = transformRow(row, iconMapping, lineHeight);
+    const {characters, rowWidth, rowHeight} = transformRow(
+      row,
+      iconMapping,
+      width,
+      lineHeight,
+      wordBreak,
+      fontSize,
+      fontFamily,
+      fontWeight,
+      textAlign
+    );
     const rowSize = [rowWidth, rowHeight];
 
     characters.forEach(datum => {
-      datum.offsetTop = offsetTop;
+      datum.offsetTop = datum.offsetTop + offsetTop;
       datum.size = size;
-      datum.rowSize = rowSize;
+      datum.rowSize = datum.rowSize || rowSize;
 
       transformedData.push(transformCharacter(datum));
     });

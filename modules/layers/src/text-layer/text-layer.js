@@ -71,6 +71,9 @@ const defaultProps = {
   lineHeight: DEFAULT_LINE_HEIGHT,
   fontSettings: {},
 
+  wordBreak: null,
+  width: null,
+
   getText: {type: 'accessor', value: x => x.text},
   getPosition: {type: 'accessor', value: x => x.position},
   getColor: {type: 'accessor', value: DEFAULT_COLOR},
@@ -94,12 +97,19 @@ export default class TextLayer extends CompositeLayer {
       this.updateFontAtlas({oldProps, props});
     }
 
-    const textChanged =
-      changeFlags.dataChanged ||
-      fontChanged ||
+    const styleChanged =
       props.lineHeight !== oldProps.lineHeight ||
+      props.wordBreak !== oldProps.wordBreak ||
+      props.width !== oldProps.width;
+
+    const textChanged =
+      fontChanged ||
+      styleChanged ||
+      changeFlags.dataChanged ||
       (changeFlags.updateTriggersChanged &&
-        (changeFlags.updateTriggersChanged.all || changeFlags.updateTriggersChanged.getText));
+        (changeFlags.updateTriggersChanged.all ||
+          changeFlags.updateTriggersChanged.getText ||
+          changeFlags.updateTriggersChanged.getTextAnchor));
 
     if (textChanged && Array.isArray(changeFlags.dataChanged)) {
       const data = this.state.data.slice();
@@ -180,7 +190,18 @@ export default class TextLayer extends CompositeLayer {
 
   /* eslint-disable no-loop-func */
   transformStringToLetters(dataRange = {}) {
-    const {data, lineHeight, getText} = this.props;
+    const {
+      data,
+      wordBreak,
+      width,
+      lineHeight,
+      getTextAnchor,
+      getText,
+      fontSettings,
+      fontFamily,
+      fontWeight
+    } = this.props;
+    const {fontSize} = fontSettings;
     const {iconMapping} = this.state;
     const {startRow, endRow} = dataRange;
     const {iterable, objectInfo} = createIterable(data, startRow, endRow);
@@ -195,7 +216,26 @@ export default class TextLayer extends CompositeLayer {
       objectInfo.index++;
       const text = getText(object, objectInfo);
       if (text) {
-        transformParagraph(text, lineHeight, iconMapping, transformCharacter, transformedData);
+        let textAlign = getTextAnchor(object);
+        textAlign = textAlign === 'middle' ? 'center' : textAlign;
+        const props = {
+          paragraph: text,
+          iconMapping,
+          transformCharacter,
+
+          fontFamily,
+          fontWeight,
+          fontSize: fontSize || DEFAULT_FONT_SIZE,
+          lineHeight,
+          textAlign
+        };
+
+        if (wordBreak && width) {
+          props.wordBreak = wordBreak;
+          props.width = width;
+        }
+
+        transformParagraph(props, transformedData);
       }
     }
 
