@@ -19,6 +19,7 @@ RUN apt-get install -y g++-6 && \
     apt-get install -y libxi-dev
 
 ENV HOME=/tmp
+ENV MAPBOX_API_KEY=pk.eyJ1IjoiZHViZXJzYWoiLCJhIjoiY2swcGw1ZmgxMGVqZzNjbnhzaWVxMHV0ZyJ9.p_3sGrPDq7v2Crb4cIfx3Q
 COPY . ${HOME}
 WORKDIR ${HOME}/bindings/python/pydeck
 
