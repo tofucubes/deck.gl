@@ -110,12 +110,7 @@ export function getQuantileScale(domain, range) {
   while (++i < n) {
     thresholds[i - 1] = threshold(sortedDomain, i / n);
   }
-  function scale(value) {
-    return quantileScale(thresholds, range, value);
-  }
-  scale.domain = () => sortedDomain;
-
-  return scale;
+  return value => quantileScale(thresholds, range, value);
 }
 
 // ordinal
@@ -139,11 +134,5 @@ export function getOrdinalScale(domain, range) {
       domainMap.set(key, uniqueDomain.push(d));
     }
   }
-  function scale(value) {
-    return ordinalScale(uniqueDomain, domainMap, range, value);
-  }
-
-  scale.domain = () => uniqueDomain;
-
-  return scale;
+  return value => ordinalScale(uniqueDomain, domainMap, range, value);
 }
