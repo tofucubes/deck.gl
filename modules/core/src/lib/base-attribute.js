@@ -127,6 +127,12 @@ export default class BaseAttribute {
       props.accessor.size = props.size;
     }
     delete props.size;
+    if ('type' in props) {
+      delete props.type;
+    }
+    if ('normalized' in props) {
+      delete props.normalized;
+    }
 
     return new Buffer(this.gl, props);
   }
